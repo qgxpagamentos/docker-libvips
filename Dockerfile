@@ -1,20 +1,35 @@
-FROM qgxpagamentos/libvips
+ARG GOLANG_VERSION=1.17.5
+FROM golang:${GOLANG_VERSION} as builder
+
+ARG IMAGINARY_VERSION=dev
+ARG LIBVIPS_VERSION=8.9.1
+ARG GOLANGCILINT_VERSION=1.23.3
 
 RUN DEBIAN_FRONTEND=noninteractive \
   apt-get update && \
-  apt-get install --no-install-recommends -y unzip
+  apt-get install --no-install-recommends -y \
+  ca-certificates \
+  automake build-essential curl \
+  gobject-introspection gtk-doc-tools libglib2.0-dev libjpeg62-turbo-dev libpng-dev \
+  libwebp-dev libtiff5-dev libgif-dev libexif-dev libxml2-dev libpoppler-glib-dev \
+  swig libmagickwand-dev libpango1.0-dev libmatio-dev libopenslide-dev libcfitsio-dev \
+  libgsf-1-dev fftw3-dev liborc-0.4-dev librsvg2-dev && \
+  cd /tmp && \
+  curl -fsSLO https://github.com/libvips/libvips/releases/download/v${LIBVIPS_VERSION}/vips-${LIBVIPS_VERSION}.tar.gz && \
+  tar zvxf vips-${LIBVIPS_VERSION}.tar.gz && \
+  cd /tmp/vips-${LIBVIPS_VERSION} && \
+	CFLAGS="-g -O3" CXXFLAGS="-D_GLIBCXX_USE_CXX11_ABI=0 -g -O3" \
+    ./configure \
+    --disable-debug \
+    --disable-dependency-tracking \
+    --disable-introspection \
+    --disable-static \
+    --enable-gtk-doc-html=no \
+    --enable-gtk-doc=no \
+    --enable-pyvips8=no && \
+  make && \
+  make install && \
+  ldconfig
 
-RUN mkdir -p /root/.config/fontconfig
-ADD fonts.conf /root/.config/fontconfig/fonts.conf
-
-# Google fonts
-RUN mkdir -p /usr/share/fonts/truetype/google-fonts
-RUN wget -O /usr/share/fonts/truetype/google-fonts/nunito.zip  https://fonts.google.com/download?family=Nunito
-RUN unzip -d /usr/share/fonts/truetype/google-fonts /usr/share/fonts/truetype/google-fonts/nunito.zip
-RUN find /usr/share/fonts/truetype/google-fonts -name "*.ttf" -exec install -m644 {} /usr/share/fonts/truetype/google-fonts/ \; || return 1
-RUN rm -f /usr/share/fonts/truetype/google-fonts/nunito.zip
-RUN fc-cache -f && rm -rf /var/cache/*
-
-ENV TZ=America/Sao_Paulo
-
-RUN echo $TZ > /etc/timezone
+WORKDIR /tmp
+RUN curl -fsSL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b "${GOPATH}/bin" v${GOLANGCILINT_VERSION}
